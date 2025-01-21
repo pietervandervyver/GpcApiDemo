@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Location Explorer</title>
+    <style>
+        /* Clean, modern styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 12px 20px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 2px solid #ccc;
+        }
+
+        #info {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid #ccc;
+        }
+
+        .info-section {
+            margin-bottom: 15px;
+        }
+
+        .info-section h3 {
+            margin: 0;
+            color: #333;
+        }
+
+        .info-item {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <input id="searchInput" type="text" placeholder="Search for a location...">
+    <div id="map"></div>
+    <div id="info"></div>
+
+    <script>
+        let map, autocomplete, infoWindow, placesService;
+
+        function initMap() {
+            // Initialize the map (centered on a default location)
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: 0, lng: 0 },
+                zoom: 2
+            });
+
+            // Initialize the Places service
+            placesService = new google.maps.places.PlacesService(map);
+            infoWindow = new google.maps.InfoWindow();
+
+            // Set up the autocomplete search box
+            autocomplete = new google.maps.places.Autocomplete(
+                document.getElementById('searchInput'),
+                { types: ['establishment', 'geocode'] }
+            );
+
+            // Bind autocomplete to the map
+            autocomplete.bindTo('bounds', map);
+
+            // Add listener for place selection
+            autocomplete.addListener('place_changed', function() {
+                const place = autocomplete.getPlace();
+                if (!place.geometry) {
+                    alert("No details available for this place");
+                    return;
+                }
+
+                // Center map on selected location
+                if (place.geometry.viewport) {
+                    map.fitBounds(place.geometry.viewport);
+                } else {
+                    map.setCenter(place.geometry.location);
+                    map.setZoom(17);
+                }
+
+                // Display place information
+                displayPlaceInfo(place);
+            });
+
+            // Add click listener to map
+            map.addListener('click', function(event) {
+                const request = {
+                    location: event.latLng,
+                    radius: '50',
+                };
+
+                placesService.nearbySearch(request, function(results, status) {
+                    if (status === google.maps.places.PlacesServiceStatus.OK && results[0]) {
+                        placesService.getDetails(
+                            { placeId: results[0].place_id },
+                            function(place, status) {
+                                if (status === google.maps.places.PlacesServiceStatus.OK) {
+                                    displayPlaceInfo(place);
+                                    map.setCenter(place.geometry.location);
+                                }
+                            }
+                        );
+                    }
+                });
+            });
+
+            // Try to get user's location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const pos = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                        };
+                        map.setCenter(pos);
+                        map.setZoom(13);
+                    },
+                    () => {
+                        // Handle location error silently
+                    }
+                );
+            }
+        }
+
+        function displayPlaceInfo(place) {
+            const infoDiv = document.getElementById('info');
+            let content = '<div class="info-section">';
+            
+            // Name and Address
+            content += `<h3>${place.name || 'Unnamed Location'}</h3>`;
+            content += `<div class="info-item">${place.formatted_address || ''}</div>`;
+
+            // Rating and Reviews
+            if (place.rating) {
+                content += `<div class="info-item">Rating: ${place.rating} ⭐ (${place.user_ratings_total} reviews)</div>`;
+            }
+
+            // Phone Number
+            if (place.formatted_phone_number) {
+                content += `<div class="info-item">📞 ${place.formatted_phone_number}</div>`;
+            }
+
+            // Website
+            if (place.website) {
+                content += `<div class="info-item">🌐 <a href="${place.website}" target="_blank">Website</a></div>`;
+            }
+
+            // Opening Hours
+            if (place.opening_hours) {
+                content += '<div class="info-item">🕒 ';
+                content += place.opening_hours.isOpen() ? 'Open Now' : 'Closed';
+                content += '</div>';
+                if (place.opening_hours.weekday_text) {
+                    content += '<details><summary>Hours</summary>';
+                    place.opening_hours.weekday_text.forEach(day => {
+                        content += `<div>${day}</div>`;
+                    });
+                    content += '</details>';
+                }
+            }
+
+            // Types
+            if (place.types && place.types.length > 0) {
+                content += `<div class="info-item">Types: ${place.types.join(', ').replace(/_/g, ' ')}</div>`;
+            }
+
+            content += '</div>';
+            infoDiv.innerHTML = content;
+
+            // Create or update marker
+            new google.maps.Marker({
+                map: map,
+                position: place.geometry.location,
+                title: place.name
+            });
+        }
+    </script>
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=initMap">
+    </script>
+</body>
+</html>
